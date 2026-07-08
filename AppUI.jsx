@@ -1,34 +1,61 @@
 import React, { useState, useRef, useEffect } from "react";
 
+// --- COMPONENTE HIJO: BLOQUE DE CÓDIGO ---
+const CodeBlock = ({ lang, code }) => {
+  const handleCopy = () => navigator.clipboard.writeText(code.trim());
+  const handleDownload = () => {
+    const blob = new Blob([code.trim()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `codigo.${lang || 'txt'}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="my-4 bg-gray-950 rounded-xl overflow-hidden border border-gray-700 shadow-lg">
+      <div className="flex justify-between items-center px-4 py-2 bg-gray-800 text-xs font-bold text-gray-300 border-b border-gray-700">
+        <span className="uppercase">{lang || 'TEXTO'}</span>
+        <div className="flex gap-3">
+          <button onClick={handleCopy} className="hover:text-white transition-colors flex items-center gap-1">
+            <span>📋</span> Copiar
+          </button>
+          <button onClick={handleDownload} className="hover:text-white transition-colors flex items-center gap-1">
+            <span>💾</span> Bajar
+          </button>
+        </div>
+      </div>
+      <pre className="p-4 overflow-x-auto text-xs text-green-400 font-mono">
+        <code>{code.trim()}</code>
+      </pre>
+    </div>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL ---
 export default function AppUI() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [attachments, setAttachments] = useState([]); // Nuevo estado para archivos
+  
   const chatBottomRef = useRef(null);
+  const fileInputRef = useRef(null);
   
   const [activeTab, setActiveTab] = useState('chat');
   const [isSaved, setIsSaved] = useState(false);
   const [logs, setLogs] = useState([]);
-
-  // Selector del modelo activo
   const [activeModel, setActiveModel] = useState('gemini');
 
-  // Estados para las llaves
   const [keys, setKeys] = useState({
-    gemini: '',
-    openai: '',
-    claude: '',
-    deepseek: '',
-    alibaba: '',
-    nvidia: ''
+    gemini: '', openai: '', claude: '', deepseek: '', alibaba: '', nvidia: ''
   });
 
-  // Añadir un registro al log
   const addLog = (msg) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
 
-  // Cargar APIs al iniciar
   useEffect(() => {
     const loadedKeys = {
       gemini: localStorage.getItem('key_gemini') || '',
@@ -39,17 +66,15 @@ export default function AppUI() {
       nvidia: localStorage.getItem('key_nvidia') || ''
     };
     setKeys(loadedKeys);
-    addLog("[OK] Sistema Multi-IA cargado.");
+    addLog("[OK] Sistema Multi-IA con soporte de archivos cargado.");
   }, []);
 
-  // Auto-scroll en el chat
   useEffect(() => {
     if (activeTab === 'chat' && chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, activeTab]);
 
-  // Guardar todas las llaves
   const saveSettings = () => {
     Object.entries(keys).forEach(([provider, key]) => {
       localStorage.setItem(`key_${provider}`, key);
@@ -59,14 +84,60 @@ export default function AppUI() {
     setTimeout(() => setIsSaved(false), 2000);
   };
 
-  const handleKeyChange = (provider, value) => {
-    setKeys(prev => ({ ...prev, [provider]: value }));
+  const handleKeyChange = (provider, value) => setKeys(prev => ({ ...prev, [provider]: value }));
+
+  // --- GESTIÓN DE ARCHIVOS ---
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    const newAttachments = [];
+    
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        await new Promise(res => reader.onload = () => {
+          newAttachments.push({ type: 'image', name: file.name, mime: file.type, data: reader.result });
+          res();
+        });
+        addLog(`[IMG] Imagen adjunta: ${file.name}`);
+      } else {
+        const text = await file.text();
+        newAttachments.push({ type: 'text', name: file.name, data: text });
+        addLog(`[DOC] Documento leído: ${file.name}`);
+      }
+    }
+    setAttachments(prev => [...prev, ...newAttachments]);
+    fileInputRef.current.value = ""; // Resetear input
   };
 
-  // Enrutador de peticiones Multi-IA
+  const removeAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // --- RENDERIZADOR DE MENSAJES CON FORMATO ---
+  const renderMessageContent = (text) => {
+    // Separa el texto usando los bloques de código como delimitadores
+    const parts = text.split(/(```[\s\S]*?```)/g);
+    
+    return parts.map((part, index) => {
+      if (part.startsWith('```') && part.endsWith('```')) {
+        // Extrae el lenguaje y el código
+        const match = part.match(/```(\w*)\n([\s\S]*?)```/);
+        if (match) {
+          return <CodeBlock key={index} lang={match[1]} code={match[2]} />;
+        }
+        // Fallback por si el formato markdown es irregular
+        return <CodeBlock key={index} lang="txt" code={part.slice(3, -3)} />;
+      }
+      // Renderiza texto normal respetando saltos de línea
+      return <p key={index} className="whitespace-pre-wrap leading-relaxed">{part}</p>;
+    });
+  };
+
+  // --- MOTOR DE ENVÍO MULTI-IA ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && attachments.length === 0) || isLoading) return;
 
     const currentKey = keys[activeModel];
     if (!currentKey) {
@@ -75,41 +146,63 @@ export default function AppUI() {
       return;
     }
 
-    const userText = input;
-    setInput("");
-    const newMessages = [...messages, { role: 'user', content: userText }];
+    // Preparar el texto final (uniendo el input con los archivos de texto)
+    const textFiles = attachments.filter(a => a.type === 'text');
+    let finalInput = input;
+    if (textFiles.length > 0) {
+      finalInput += "\n\n" + textFiles.map(a => `--- ARCHIVO: ${a.name} ---\n${a.data}\n--- FIN DE ARCHIVO ---`).join('\n\n');
+    }
+
+    const images = attachments.filter(a => a.type === 'image');
+    
+    // Guardar en UI
+    const displayUserText = input + (attachments.length > 0 ? `\n[+ ${attachments.length} archivos adjuntos]` : '');
+    const newMessages = [...messages, { role: 'user', content: displayUserText }];
+    
     setMessages(newMessages);
+    setInput("");
+    setAttachments([]); // Limpiar adjuntos
     setIsLoading(true);
     addLog(`Conectando con ${activeModel.toUpperCase()}...`);
 
     try {
       let botReply = "";
 
-      // 1. GEMINI
+      // 1. GEMINI (Soporta texto e imágenes)
       if (activeModel === 'gemini') {
+        const parts = [{ text: finalInput }];
+        images.forEach(img => {
+          parts.push({ inline_data: { mime_type: img.mime, data: img.data.split(',')[1] } });
+        });
+
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: userText }] }] })
+          body: JSON.stringify({ contents: [{ parts }] })
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error.message);
         botReply = data.candidates[0].content.parts[0].text;
       }
       
-      // 2. CLAUDE (Anthropic)
+      // 2. CLAUDE (Soporta texto e imágenes)
       else if (activeModel === 'claude') {
+        const content = [{ type: 'text', text: finalInput }];
+        images.forEach(img => {
+          content.push({ type: 'image', source: { type: 'base64', media_type: img.mime, data: img.data.split(',')[1] } });
+        });
+
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-api-key': currentKey,
             'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true' // Vital para navegador
+            'anthropic-dangerous-direct-browser-access': 'true'
           },
           body: JSON.stringify({
             model: 'claude-3-5-sonnet-20240620',
-            max_tokens: 1024,
-            messages: [{ role: 'user', content: userText }]
+            max_tokens: 4096,
+            messages: [{ role: 'user', content }]
           })
         });
         const data = await res.json();
@@ -117,7 +210,7 @@ export default function AppUI() {
         botReply = data.content[0].text;
       }
 
-      // 3. OPENAI COMPATIBLES (OpenAI, DeepSeek, Alibaba, Nvidia)
+      // 3. MODELOS OPENAI Y COMPATIBLES
       else {
         let endpoint = '';
         let modelId = '';
@@ -133,18 +226,24 @@ export default function AppUI() {
           modelId = 'qwen-plus';
         } else if (activeModel === 'nvidia') {
           endpoint = 'https://integrate.api.nvidia.com/v1/chat/completions';
-          modelId = 'meta/llama3-70b-instruct'; // Llama 3 en Nvidia NIM
+          modelId = 'meta/llama3-70b-instruct';
+        }
+
+        // Construcción de Payload (DeepSeek, Alibaba y Nvidia a veces fallan con imágenes, así que enviamos solo texto para ellos, OpenAI sí soporta)
+        let content = finalInput;
+        if (activeModel === 'openai' && images.length > 0) {
+          content = [{ type: 'text', text: finalInput }];
+          images.forEach(img => content.push({ type: 'image_url', image_url: { url: img.data } }));
+        } else if (images.length > 0) {
+           addLog(`[WARN] Se ignoraron las imágenes porque ${activeModel.toUpperCase()} no soporta visión en esta configuración.`);
         }
 
         const res = await fetch(endpoint, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${currentKey}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentKey}` },
           body: JSON.stringify({
             model: modelId,
-            messages: [{ role: 'user', content: userText }]
+            messages: [{ role: 'user', content }]
           })
         });
         const data = await res.json();
@@ -164,14 +263,12 @@ export default function AppUI() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-black text-white font-sans overflow-hidden">
-      {/* HEADER */}
       <header className="p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center z-10 shrink-0">
         <h1 className="font-bold text-xl tracking-tight text-blue-400">Tupia Multi-AI</h1>
         <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-bold text-sm">🧠</div>
       </header>
 
-      {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto pb-32 relative">
+      <main className="flex-1 overflow-y-auto pb-40 relative">
         
         {/* CHAT */}
         {activeTab === 'chat' && (
@@ -179,15 +276,15 @@ export default function AppUI() {
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-10 bg-gray-900 border border-gray-800 p-6 rounded-2xl">
                 <span className="text-5xl block mb-4">🌍</span>
-                <p className="font-bold text-gray-300">¡Conectado al mundo IA!</p>
-                <p className="text-sm mt-2">Selecciona abajo tu motor y empieza a chatear.</p>
+                <p className="font-bold text-gray-300">Hub IA Inteligente</p>
+                <p className="text-sm mt-2">Sube archivos, extrae código y domina todas las APIs.</p>
               </div>
             )}
             
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 border border-gray-700 rounded-bl-sm'}`}>
-                  {msg.content}
+                <div className={`max-w-[90%] p-4 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-900 text-gray-100 border border-gray-700 rounded-bl-sm'}`}>
+                  {msg.role === 'user' ? <p className="whitespace-pre-wrap">{msg.content}</p> : renderMessageContent(msg.content)}
                 </div>
               </div>
             ))}
@@ -203,11 +300,10 @@ export default function AppUI() {
           </div>
         )}
 
-        {/* AJUSTES - LIBRERÍA DE APIs */}
+        {/* AJUSTES */}
         {activeTab === 'settings' && (
           <div className="p-6 space-y-4">
             <h2 className="text-xl font-bold border-b border-gray-800 pb-2">🔑 Bóveda de APIs</h2>
-            
             {[
               { id: 'openai', name: 'OpenAI (GPT-4o)', color: 'text-green-400', border: 'focus:border-green-500' },
               { id: 'claude', name: 'Claude (Anthropic)', color: 'text-orange-400', border: 'focus:border-orange-500' },
@@ -227,11 +323,7 @@ export default function AppUI() {
                 />
               </div>
             ))}
-
-            <button 
-              onClick={saveSettings}
-              className={`w-full font-bold py-4 px-4 rounded-xl transition-all shadow-lg ${isSaved ? 'bg-green-600' : 'bg-blue-600'}`}
-            >
+            <button onClick={saveSettings} className={`w-full font-bold py-4 px-4 rounded-xl transition-all shadow-lg ${isSaved ? 'bg-green-600' : 'bg-blue-600'}`}>
               {isSaved ? "✅ Todas las llaves guardadas" : "💾 Guardar Bóveda"}
             </button>
           </div>
@@ -249,10 +341,9 @@ export default function AppUI() {
         )}
       </main>
 
-      {/* INPUT FORM MULTI-MODELO (Solo en Chat) */}
+      {/* INPUT FORM CON ARCHIVOS */}
       {activeTab === 'chat' && (
         <div className="fixed bottom-[70px] left-0 w-full bg-gray-900 border-t border-gray-800 z-10 p-2 flex flex-col gap-2">
-          {/* Selector de IA */}
           <select 
             value={activeModel}
             onChange={(e) => setActiveModel(e.target.value)}
@@ -266,14 +357,32 @@ export default function AppUI() {
             <option value="nvidia">Nvidia (Llama 3 70B)</option>
           </select>
 
+          {/* PREVISUALIZACIÓN DE ADJUNTOS */}
+          {attachments.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {attachments.map((file, idx) => (
+                <div key={idx} className="bg-gray-800 text-xs text-gray-300 px-3 py-1 rounded-full flex items-center gap-2 whitespace-nowrap border border-gray-700">
+                  <span>{file.type === 'image' ? '🖼️' : '📄'}</span>
+                  <span className="max-w-[100px] truncate">{file.name}</span>
+                  <button onClick={() => removeAttachment(idx)} className="text-red-400 font-bold hover:text-red-300">X</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="flex gap-2 w-full">
+            <button type="button" onClick={() => fileInputRef.current.click()} className="bg-gray-800 border border-gray-700 w-[50px] rounded-xl flex items-center justify-center hover:bg-gray-700 transition-colors">
+              📎
+            </button>
+            <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+            
             <input
               className="flex-1 bg-black border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-sm"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={`Enviar a ${activeModel}...`}
+              placeholder="Escribe o adjunta..."
             />
-            <button type="submit" disabled={!input.trim() || isLoading} className="bg-blue-600 disabled:bg-gray-800 w-[50px] rounded-xl font-bold flex items-center justify-center text-white">
+            <button type="submit" disabled={(!input.trim() && attachments.length === 0) || isLoading} className="bg-blue-600 disabled:bg-gray-800 w-[50px] rounded-xl font-bold flex items-center justify-center text-white transition-colors">
               ➤
             </button>
           </form>
