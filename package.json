@@ -11,7 +11,7 @@
     "react-dom": "^18.2.0",
     "ai": "^2.0.24",
     "@ai-sdk/anthropic": "^2.0.16",
-    "ollama-ai-provider": "^0.3.3",
+    "@ai-sdk/ollama": "latest",
     "@langchain/langgraph": "^0.0.32",
     "web-tree-sitter": "^0.20.7",
     "diff-match-patch": "^1.0.5"
