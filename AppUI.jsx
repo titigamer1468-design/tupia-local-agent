@@ -7,24 +7,39 @@ export default function AppUI() {
   const chatBottomRef = useRef(null);
   
   const [activeTab, setActiveTab] = useState('chat');
-  const [geminiKey, setGeminiKey] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [logs, setLogs] = useState([]);
+
+  // Selector del modelo activo
+  const [activeModel, setActiveModel] = useState('gemini');
+
+  // Estados para las llaves
+  const [keys, setKeys] = useState({
+    gemini: '',
+    openai: '',
+    claude: '',
+    deepseek: '',
+    alibaba: '',
+    nvidia: ''
+  });
 
   // Añadir un registro al log
   const addLog = (msg) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
 
-  // Cargar API al iniciar
+  // Cargar APIs al iniciar
   useEffect(() => {
-    const savedGemini = localStorage.getItem('geminiKey');
-    if (savedGemini) {
-      setGeminiKey(savedGemini);
-      addLog("[OK] API Key de Gemini cargada desde memoria.");
-    } else {
-      addLog("[WARN] Falta configurar tu API Key.");
-    }
+    const loadedKeys = {
+      gemini: localStorage.getItem('key_gemini') || '',
+      openai: localStorage.getItem('key_openai') || '',
+      claude: localStorage.getItem('key_claude') || '',
+      deepseek: localStorage.getItem('key_deepseek') || '',
+      alibaba: localStorage.getItem('key_alibaba') || '',
+      nvidia: localStorage.getItem('key_nvidia') || ''
+    };
+    setKeys(loadedKeys);
+    addLog("[OK] Sistema Multi-IA cargado.");
   }, []);
 
   // Auto-scroll en el chat
@@ -34,21 +49,28 @@ export default function AppUI() {
     }
   }, [messages, activeTab]);
 
-  // Guardar configuración
+  // Guardar todas las llaves
   const saveSettings = () => {
-    localStorage.setItem('geminiKey', geminiKey);
+    Object.entries(keys).forEach(([provider, key]) => {
+      localStorage.setItem(`key_${provider}`, key);
+    });
     setIsSaved(true);
-    addLog("[INFO] Nueva API Key guardada.");
+    addLog("[INFO] Configuración de APIs actualizada.");
     setTimeout(() => setIsSaved(false), 2000);
   };
 
-  // Enviar mensaje a Gemini (Conexión Directa)
+  const handleKeyChange = (provider, value) => {
+    setKeys(prev => ({ ...prev, [provider]: value }));
+  };
+
+  // Enrutador de peticiones Multi-IA
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    if (!geminiKey) {
-      alert("⚠️ ¡Falta tu API Key! Ve a la pestaña ⚙️ APIs para guardarla primero.");
+    const currentKey = keys[activeModel];
+    if (!currentKey) {
+      alert(`⚠️ Falta tu API Key para ${activeModel.toUpperCase()}! Ve a Ajustes.`);
       setActiveTab('settings');
       return;
     }
@@ -58,26 +80,80 @@ export default function AppUI() {
     const newMessages = [...messages, { role: 'user', content: userText }];
     setMessages(newMessages);
     setIsLoading(true);
-    addLog("Enviando mensaje a Gemini...");
+    addLog(`Conectando con ${activeModel.toUpperCase()}...`);
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: userText }] }]
-        })
-      });
+      let botReply = "";
 
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error.message);
+      // 1. GEMINI
+      if (activeModel === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: userText }] }] })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        botReply = data.candidates[0].content.parts[0].text;
+      }
+      
+      // 2. CLAUDE (Anthropic)
+      else if (activeModel === 'claude') {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': currentKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true' // Vital para navegador
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-sonnet-20240620',
+            max_tokens: 1024,
+            messages: [{ role: 'user', content: userText }]
+          })
+        });
+        const data = await res.json();
+        if (data.type === 'error') throw new Error(data.error.message);
+        botReply = data.content[0].text;
       }
 
-      const botReply = data.candidates[0].content.parts[0].text;
+      // 3. OPENAI COMPATIBLES (OpenAI, DeepSeek, Alibaba, Nvidia)
+      else {
+        let endpoint = '';
+        let modelId = '';
+
+        if (activeModel === 'openai') {
+          endpoint = 'https://api.openai.com/v1/chat/completions';
+          modelId = 'gpt-4o-mini';
+        } else if (activeModel === 'deepseek') {
+          endpoint = 'https://api.deepseek.com/chat/completions';
+          modelId = 'deepseek-chat';
+        } else if (activeModel === 'alibaba') {
+          endpoint = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions';
+          modelId = 'qwen-plus';
+        } else if (activeModel === 'nvidia') {
+          endpoint = 'https://integrate.api.nvidia.com/v1/chat/completions';
+          modelId = 'meta/llama3-70b-instruct'; // Llama 3 en Nvidia NIM
+        }
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentKey}`
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [{ role: 'user', content: userText }]
+          })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        botReply = data.choices[0].message.content;
+      }
+
       setMessages([...newMessages, { role: 'assistant', content: botReply }]);
-      addLog("[OK] Respuesta recibida con éxito.");
+      addLog(`[OK] Respuesta de ${activeModel.toUpperCase()} recibida.`);
     } catch (error) {
       setMessages([...newMessages, { role: 'assistant', content: `❌ Error: ${error.message}` }]);
       addLog(`[ERROR] ${error.message}`);
@@ -90,21 +166,21 @@ export default function AppUI() {
     <div className="flex flex-col h-[100dvh] bg-black text-white font-sans overflow-hidden">
       {/* HEADER */}
       <header className="p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center z-10 shrink-0">
-        <h1 className="font-bold text-xl tracking-tight text-blue-400">Tupia Agent</h1>
+        <h1 className="font-bold text-xl tracking-tight text-blue-400">Tupia Multi-AI</h1>
         <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-bold text-sm">🧠</div>
       </header>
 
       {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto pb-24 relative">
+      <main className="flex-1 overflow-y-auto pb-32 relative">
         
         {/* CHAT */}
         {activeTab === 'chat' && (
           <div className="p-4 space-y-4">
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-10 bg-gray-900 border border-gray-800 p-6 rounded-2xl">
-                <span className="text-5xl block mb-4">🤖</span>
-                <p className="font-bold text-gray-300">¡Listo para la acción!</p>
-                <p className="text-sm mt-2">Asegúrate de haber puesto tu API Key en la pestaña de Ajustes.</p>
+                <span className="text-5xl block mb-4">🌍</span>
+                <p className="font-bold text-gray-300">¡Conectado al mundo IA!</p>
+                <p className="text-sm mt-2">Selecciona abajo tu motor y empieza a chatear.</p>
               </div>
             )}
             
@@ -119,7 +195,7 @@ export default function AppUI() {
             {isLoading && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] p-3 rounded-2xl bg-gray-800 border border-gray-700 text-gray-400 rounded-bl-none animate-pulse text-sm">
-                  Pensando...
+                  {activeModel.toUpperCase()} está procesando...
                 </div>
               </div>
             )}
@@ -127,27 +203,36 @@ export default function AppUI() {
           </div>
         )}
 
-        {/* AJUSTES */}
+        {/* AJUSTES - LIBRERÍA DE APIs */}
         {activeTab === 'settings' && (
-          <div className="p-6 space-y-6">
-            <h2 className="text-xl font-bold border-b border-gray-800 pb-2">🔑 API de Google Gemini</h2>
+          <div className="p-6 space-y-4">
+            <h2 className="text-xl font-bold border-b border-gray-800 pb-2">🔑 Bóveda de APIs</h2>
             
-            <div className="bg-gray-900 p-4 rounded-xl border border-gray-800">
-              <label className="block text-sm font-bold text-blue-400 mb-2">Pega tu API Key aquí:</label>
-              <input 
-                type="password" 
-                className="w-full bg-black border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-all"
-                placeholder="AIzaSy..."
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-              />
-            </div>
+            {[
+              { id: 'openai', name: 'OpenAI (GPT-4o)', color: 'text-green-400', border: 'focus:border-green-500' },
+              { id: 'claude', name: 'Claude (Anthropic)', color: 'text-orange-400', border: 'focus:border-orange-500' },
+              { id: 'gemini', name: 'Google Gemini', color: 'text-blue-400', border: 'focus:border-blue-500' },
+              { id: 'deepseek', name: 'DeepSeek', color: 'text-purple-400', border: 'focus:border-purple-500' },
+              { id: 'alibaba', name: 'Alibaba (Qwen)', color: 'text-yellow-400', border: 'focus:border-yellow-500' },
+              { id: 'nvidia', name: 'Nvidia NIM (Llama 3)', color: 'text-emerald-400', border: 'focus:border-emerald-500' }
+            ].map((provider) => (
+              <div key={provider.id} className="bg-gray-900 p-4 rounded-xl border border-gray-800">
+                <label className={`block text-sm font-bold ${provider.color} mb-2`}>{provider.name}</label>
+                <input 
+                  type="password" 
+                  className={`w-full bg-black border border-gray-700 rounded-lg p-3 text-white focus:outline-none transition-all ${provider.border}`}
+                  placeholder="Pega tu API Key..."
+                  value={keys[provider.id]}
+                  onChange={(e) => handleKeyChange(provider.id, e.target.value)}
+                />
+              </div>
+            ))}
 
             <button 
               onClick={saveSettings}
-              className={`w-full font-bold py-4 px-4 rounded-xl transition-all ${isSaved ? 'bg-green-600' : 'bg-blue-600'}`}
+              className={`w-full font-bold py-4 px-4 rounded-xl transition-all shadow-lg ${isSaved ? 'bg-green-600' : 'bg-blue-600'}`}
             >
-              {isSaved ? "✅ Guardado correctamente" : "💾 Guardar API Key"}
+              {isSaved ? "✅ Todas las llaves guardadas" : "💾 Guardar Bóveda"}
             </button>
           </div>
         )}
@@ -155,8 +240,8 @@ export default function AppUI() {
         {/* LOGS */}
         {activeTab === 'logs' && (
           <div className="p-4 h-full flex flex-col">
-            <h2 className="text-xl font-bold border-b border-gray-800 pb-2 mb-4">📋 Consola del Sistema</h2>
-            <div className="bg-black flex-1 rounded-xl p-4 font-mono text-xs text-green-400 overflow-y-auto border border-gray-800">
+            <h2 className="text-xl font-bold border-b border-gray-800 pb-2 mb-4">📋 Consola de Peticiones</h2>
+            <div className="bg-black flex-1 rounded-xl p-4 font-mono text-xs text-green-400 overflow-y-auto border border-gray-800 pb-20">
               {logs.map((log, i) => <p key={i} className="mb-2">{log}</p>)}
               <p className="animate-pulse mt-4">_</p>
             </div>
@@ -164,21 +249,35 @@ export default function AppUI() {
         )}
       </main>
 
-      {/* INPUT FORM (Solo en Chat) */}
+      {/* INPUT FORM MULTI-MODELO (Solo en Chat) */}
       {activeTab === 'chat' && (
-        <form onSubmit={handleSubmit} className="fixed bottom-[70px] left-0 w-full p-3 bg-gray-900 border-t border-gray-800 z-10">
-          <div className="flex gap-2">
+        <div className="fixed bottom-[70px] left-0 w-full bg-gray-900 border-t border-gray-800 z-10 p-2 flex flex-col gap-2">
+          {/* Selector de IA */}
+          <select 
+            value={activeModel}
+            onChange={(e) => setActiveModel(e.target.value)}
+            className="w-full bg-black border border-gray-700 text-xs text-gray-300 rounded-lg p-2 outline-none focus:border-blue-500"
+          >
+            <option value="openai">OpenAI (GPT-4o Mini)</option>
+            <option value="claude">Claude 3.5 Sonnet</option>
+            <option value="gemini">Google Gemini 1.5</option>
+            <option value="deepseek">DeepSeek Chat</option>
+            <option value="alibaba">Alibaba Qwen Plus</option>
+            <option value="nvidia">Nvidia (Llama 3 70B)</option>
+          </select>
+
+          <form onSubmit={handleSubmit} className="flex gap-2 w-full">
             <input
-              className="flex-1 bg-black border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
+              className="flex-1 bg-black border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-sm"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Escribe tu mensaje..."
+              placeholder={`Enviar a ${activeModel}...`}
             />
-            <button type="submit" disabled={!input.trim() || isLoading} className="bg-blue-600 disabled:bg-gray-800 w-[50px] h-[50px] rounded-xl font-bold flex items-center justify-center">
+            <button type="submit" disabled={!input.trim() || isLoading} className="bg-blue-600 disabled:bg-gray-800 w-[50px] rounded-xl font-bold flex items-center justify-center text-white">
               ➤
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       )}
 
       {/* NAVEGACIÓN MÓVIL */}
@@ -187,7 +286,7 @@ export default function AppUI() {
           <span className="text-xl">💬</span><span className="text-[10px] font-bold">CHAT</span>
         </button>
         <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center p-2 w-20 ${activeTab === 'settings' ? 'text-blue-500' : 'text-gray-500'}`}>
-          <span className="text-xl">⚙️</span><span className="text-[10px] font-bold">APIs</span>
+          <span className="text-xl">⚙️</span><span className="text-[10px] font-bold">BÓVEDA</span>
         </button>
         <button onClick={() => setActiveTab('logs')} className={`flex flex-col items-center p-2 w-20 ${activeTab === 'logs' ? 'text-blue-500' : 'text-gray-500'}`}>
           <span className="text-xl">📋</span><span className="text-[10px] font-bold">LOGS</span>
