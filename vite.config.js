@@ -7,13 +7,8 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        main: './index.html' // Vite usará esto como el ancla principal
+        main: './index.html'
       }
-    }
-  },
-  server: {
-    fs: {
-      strict: false, // Esto permite que Vite busque archivos fuera de su raíz si es necesario
     }
   }
 })
