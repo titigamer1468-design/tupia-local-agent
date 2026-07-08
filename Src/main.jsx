@@ -1,14 +1,9 @@
-// main.jsx
-import React, { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import "./index.css";
-import AppUI from "./AppUI.jsx";
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import AppUI from './AppUI'; // Asegúrate de que el archivo se llame AppUI.jsx o AppUI.js
 
-const container = document.getElementById("root");
-const root = createRoot(container);
-
-root.render(
-  <StrictMode>
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
     <AppUI />
-  </StrictMode>
+  </React.StrictMode>
 );
