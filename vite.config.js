@@ -7,15 +7,6 @@ export default defineConfig({
       include: "**/*.{jsx,js,tsx,ts}",
     }),
   ],
-  server: {
-    headers: {
-      "Cross-Origin-Embedder-Policy": "require-corp",
-      "Cross-Origin-Opener-Policy": "same-origin",
-    },
-  },
-  optimizeDeps: {
-    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
-  },
   build: {
     rollupOptions: {
       input: './index.html'

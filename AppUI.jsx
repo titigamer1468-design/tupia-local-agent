@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-// 🚨 IMPORTACIONES DEL MOTOR DE VIDEO REAL 🚨
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+// 🚨 IMPORTACIONES DEL MOTOR DE VIDEO REAL SINGLE-THREAD 🚨
+import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 
 // --- DICCIONARIO DE MODELOS ESPECÍFICOS ---
 const MODEL_VERSIONS = {
@@ -98,7 +97,8 @@ export default function AppUI() {
   const [ffmpegLog, setFfmpegLog] = useState("🎬 Estudio de video preparado. Listo para cargar clips.");
   const [videoResult, setVideoResult] = useState(null);
   
-  const ffmpegRef = useRef(new FFmpeg());
+  // Instanciamos la API v0.11 estable
+  const ffmpegRef = useRef(createFFmpeg({ log: false }));
 
   const [keys, setKeys] = useState({
     gemini: '', openai: '', claude: '', deepseek: '', alibaba: '', nvidia: '', ghl: ''
@@ -203,7 +203,7 @@ export default function AppUI() {
     setFfmpegLog(`[INFO] Cargados ${files.length} archivos multimedia al estudio.`);
   };
 
-  // 🚀 MOTOR FFMPG WASM OPTIMIZADO Y COMPATIBLE 🚀
+  // 🚀 MOTOR FFMPG WASM OPTIMIZADO PARA HILO ÚNICO TOLERANTE 🚀
   const runFfmpegRender = async () => {
     if (videoFiles.length === 0) {
       alert("Sube algunas imágenes al Estudio primero para poder procesar.");
@@ -212,34 +212,30 @@ export default function AppUI() {
     
     setIsRendering(true);
     setVideoResult(null);
-    setFfmpegLog("[INFO] Despertando al motor FFmpeg virtual...");
+    setFfmpegLog("[INFO] Despertando al motor FFmpeg de un solo hilo...");
 
     try {
       const ffmpeg = ffmpegRef.current;
 
-      ffmpeg.on('log', ({ message }) => {
+      ffmpeg.setLogger(({ message }) => {
         setFfmpegLog(prev => `${prev}\n[FFMPEG] ${message}`);
       });
 
-      if (!ffmpeg.loaded) {
-        setFfmpegLog(prev => `${prev}\n[INFO] Descargando núcleos tolerantes en jsDelivr...`);
-        
-        await ffmpeg.load({
-          coreURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', 'text/javascript'),
-          wasmURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
-        });
+      if (!ffmpeg.isLoaded()) {
+        setFfmpegLog(prev => `${prev}\n[INFO] Cargando núcleos estables libres de bloqueos...`);
+        await ffmpeg.load();
       }
 
       setFfmpegLog(prev => `${prev}\n[INFO] Creando sandbox de archivos virtuales...`);
 
       for (let i = 0; i < videoFiles.length; i++) {
         const fileData = await fetchFile(videoFiles[i].file);
-        await ffmpeg.writeFile(`img${i}.jpg`, fileData);
+        ffmpeg.FS('writeFile', `img${i}.jpg`, fileData);
       }
 
       setFfmpegLog(prev => `${prev}\n[INFO] Compilando slideshow vertical en h.264 (1080x1920)...`);
 
-      await ffmpeg.exec([
+      await ffmpeg.run(
         '-framerate', '1/2', 
         '-i', 'img%d.jpg',   
         '-c:v', 'libx264',   
@@ -247,11 +243,11 @@ export default function AppUI() {
         '-pix_fmt', 'yuv420p',
         '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
         'output.mp4'         
-      ]);
+      );
 
       setFfmpegLog(prev => `${prev}\n[INFO] Extrayendo buffer binario de salida...`);
 
-      const data = await ffmpeg.readFile('output.mp4');
+      const data = ffmpeg.FS('readFile', 'output.mp4');
       const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
 
@@ -260,7 +256,7 @@ export default function AppUI() {
 
     } catch (error) {
       console.error(error);
-      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Bloqueo de hilos en el navegador'}`);
+      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Fallo en compilación local'}`);
     } finally {
       setIsRendering(false);
     }
@@ -466,7 +462,7 @@ export default function AppUI() {
             <h2 className="text-xl font-bold border-b border-gray-800 pb-2 flex items-center gap-2 text-red-400">
               <span>🎬</span> Tupia Video Engine
             </h2>
-            <p className="text-xs text-gray-400 leading-relaxed">Sube imágenes para generar tu video Faceless. El motor FFmpeg.wasm procesará los archivos localmente en tu celular a velocidad nativa.</p>
+            <p className="text-xs text-gray-400 leading-relaxed">Sube imágenes para generar tu video Faceless. El motor FFmpeg de un solo hilo procesará los archivos localmente a velocidad nativa sin pedirle permisos especiales al servidor.</p>
             
             <div className="bg-gray-900 p-6 rounded-2xl border-2 border-dashed border-gray-800 flex flex-col items-center justify-center text-center cursor-pointer hover:border-red-500/40 transition-colors" onClick={() => document.getElementById('studio-upload').click()}>
               <span className="text-4xl mb-2">🎞️</span>
