@@ -1,57 +1,32 @@
 import React, { useState, useRef, useEffect } from "react";
-// 🚨 IMPORTACIONES DEL MOTOR DE VIDEO REAL 🚨
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
-// --- DICCIONARIO DE MODELOS ESPECÍFICOS ---
 const MODEL_VERSIONS = {
-  openai: [
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    { id: 'gpt-4o', name: 'GPT-4o (Mejor)' }
-  ],
-  claude: [
-    { id: 'claude-3-5-sonnet-20241022', name: 'Sonnet 3.5' },
-    { id: 'claude-3-5-haiku-20241022', name: 'Haiku 3.5' }
-  ],
-  gemini: [
-    { id: 'gemini-1.5-flash', name: '1.5 Flash' },
-    { id: 'gemini-1.5-pro', name: '1.5 Pro' }
-  ],
-  deepseek: [
-    { id: 'deepseek-chat', name: 'V3 Chat' },
-    { id: 'deepseek-reasoner', name: 'R1 Reasoner' }
-  ],
-  alibaba: [
-    { id: 'qwen-plus', name: 'Qwen Plus' },
-    { id: 'qwen-max', name: 'Qwen Max' }
-  ],
-  nvidia: [
-    { id: 'meta/llama3-70b-instruct', name: 'Llama 3 70B' }
-  ]
+  openai: [{ id: 'gpt-4o-mini', name: 'GPT-4o Mini' }, { id: 'gpt-4o', name: 'GPT-4o (Mejor)' }],
+  claude: [{ id: 'claude-3-5-sonnet-20241022', name: 'Sonnet 3.5' }, { id: 'claude-3-5-haiku-20241022', name: 'Haiku 3.5' }],
+  gemini: [{ id: 'gemini-1.5-flash', name: '1.5 Flash' }, { id: 'gemini-1.5-pro', name: '1.5 Pro' }],
+  deepseek: [{ id: 'deepseek-chat', name: 'V3 Chat' }, { id: 'deepseek-reasoner', name: 'R1 Reasoner' }],
+  alibaba: [{ id: 'qwen-plus', name: 'Qwen Plus' }, { id: 'qwen-max', name: 'Qwen Max' }],
+  nvidia: [{ id: 'meta/llama3-70b-instruct', name: 'Llama 3 70B' }]
 };
 
-// --- DEFINICIÓN DE MODOS (PROMPTS DEL SISTEMA) ---
 const PERSONAS = {
-  default: "Eres Tupia, un asistente de IA experto y amigable. Respondes de forma clara, directa y estructurada.",
-  plan: "Eres Tupia MODO PLAN. Eres un Estratega y Project Manager experto. No escribes código. Tu objetivo es desglosar ideas en planes de acción paso a paso, cronogramas, listas de requisitos y definir objetivos. Estructuras todo con listas para máxima claridad.",
-  think: "Eres Tupia MODO THINK. Eres un Arquitecto de Software y Diseñador de Prompts (Prompt Engineer). Tu objetivo es tomar un 'Plan' y PENSAR la arquitectura técnica. Desglosas el proyecto en: 1) Estructura de archivos, 2) Flujo de datos, y 3) Escribes la secuencia exacta de PROMPTS super detallados que el usuario deberá copiar y pegar en el 'Modo Build' para que la IA genere el código sin errores. Eres el puente entre la idea y la programación.",
-  build: "Eres Tupia MODO BUILD. Eres un Desarrollador Full-Stack de élite. Escribes código listo para producción, limpio y optimizado. No das explicaciones largas ni saludos. Te limitas a entregar el bloque de código perfecto solicitado y una breve línea de cómo usarlo.",
+  default: "Eres Tupia, un asistente de IA experto y amigable.",
+  plan: "Eres Tupia MODO PLAN. Eres un Estratega y Project Manager experto. Desglosas ideas en planes de acción paso a paso con viñetas.",
+  think: "Eres Tupia MODO THINK. Eres un Arquitecto de Software. Piensas la arquitectura técnica y escribes los PROMPTS para el Modo Build.",
+  build: "Eres Tupia MODO BUILD. Eres un Desarrollador Full-Stack. Escribes código limpio. No das explicaciones largas.",
   director: "Eres Tupia MODO DIRECTOR DE CINE. Tu trabajo es analizar la emoción o temática que pide el usuario y tomar DECISIONES MATEMÁTICAS ÓPTIMAS de animación para un motor de video. Debes decidir el tiempo por foto, el factor de zoom y las coordenadas de paneo. ESTRICTAMENTE PROHIBIDO usar markdown o texto de relleno. DEBES devolver UNICAMENTE un objeto JSON válido con esta estructura exacta: { \"emocion_detectada\": \"str\", \"duracion_clip_segundos\": float, \"zoom_inicial\": float (ej. 1.0), \"zoom_final\": float (ej. 1.5), \"matematica_zoompan_x\": \"str (ej. 'iw/2-(iw/zoom/2)')\", \"matematica_zoompan_y\": \"str\", \"explicacion_decisiones\": \"str\" }",
-  youtube: "Eres Tupia MODO YOUTUBE. Eres un experto en retención de audiencia y el algoritmo de YouTube. Creas Títulos Virales y Ganchos (Hooks) irresistibles para los primeros 15 segundos.",
-  infoproducto: "Eres Tupia MODO INFOPRODUCTO. Eres un experto en Marketing Digital y creación de Cursos Online. Diseñas ofertas irresistibles y copy persuasivo."
+  youtube: "Eres Tupia MODO YOUTUBE. Eres un experto en retención y el algoritmo de YouTube.",
+  infoproducto: "Eres Tupia MODO INFOPRODUCTO. Diseñas ofertas irresistibles y copy persuasivo."
 };
 
-// --- COMPONENTE HIJO: BLOQUE DE CÓDIGO ---
 const CodeBlock = ({ lang, code }) => {
   const handleCopy = () => navigator.clipboard.writeText(code.trim());
   const handleDownload = () => {
     const blob = new Blob([code.trim()], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `codigo.${lang || 'txt'}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `codigo.${lang || 'txt'}`; a.click(); URL.revokeObjectURL(url);
   };
 
   return (
@@ -59,40 +34,32 @@ const CodeBlock = ({ lang, code }) => {
       <div className="flex justify-between items-center px-4 py-2 bg-gray-800 text-xs font-bold text-gray-300 border-b border-gray-700">
         <span className="uppercase">{lang || 'TEXTO'}</span>
         <div className="flex gap-3">
-          <button onClick={handleCopy} className="hover:text-white transition-colors flex items-center gap-1"><span>📋</span> Copiar Código</button>
+          <button onClick={handleCopy} className="hover:text-white transition-colors flex items-center gap-1"><span>📋</span> Copiar</button>
           <button onClick={handleDownload} className="hover:text-white transition-colors flex items-center gap-1"><span>💾</span> Bajar</button>
         </div>
       </div>
-      <pre className="p-4 overflow-x-auto text-xs text-green-400 font-mono">
-        <code>{code.trim()}</code>
-      </pre>
+      <pre className="p-4 overflow-x-auto text-xs text-green-400 font-mono"><code>{code.trim()}</code></pre>
     </div>
   );
 };
 
-// --- COMPONENTE PRINCIPAL ---
 export default function AppUI() {
   const [chats, setChats] = useState([]);
   const [currentChatId, setCurrentChatId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [attachments, setAttachments] = useState([]); 
-  
   const chatBottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat', 'studio', 'settings', 'logs'
+  const [activeTab, setActiveTab] = useState('chat');
   const [isSaved, setIsSaved] = useState(false);
   const [logs, setLogs] = useState([]);
   
-  // Selectores
   const [activeModel, setActiveModel] = useState('deepseek'); 
   const [specificModel, setSpecificModel] = useState('deepseek-chat'); 
   const [activePersona, setActivePersona] = useState('default');
 
-  // Estado del Estudio de Video Real
   const [videoFiles, setVideoFiles] = useState([]);
   const [isRendering, setIsRendering] = useState(false);
   const [ffmpegLog, setFfmpegLog] = useState("🎬 Estudio de video preparado. Listo para cargar clips.");
@@ -112,30 +79,22 @@ export default function AppUI() {
     }
   }, [activeModel]);
 
-  // Cargar llaves y CHATS al iniciar
   useEffect(() => {
     const loadedKeys = {
-      gemini: localStorage.getItem('key_gemini') || '',
-      openai: localStorage.getItem('key_openai') || '',
-      claude: localStorage.getItem('key_claude') || '',
-      deepseek: localStorage.getItem('key_deepseek') || '',
-      alibaba: localStorage.getItem('key_alibaba') || '',
-      nvidia: localStorage.getItem('key_nvidia') || '',
+      gemini: localStorage.getItem('key_gemini') || '', openai: localStorage.getItem('key_openai') || '',
+      claude: localStorage.getItem('key_claude') || '', deepseek: localStorage.getItem('key_deepseek') || '',
+      alibaba: localStorage.getItem('key_alibaba') || '', nvidia: localStorage.getItem('key_nvidia') || '',
       ghl: localStorage.getItem('key_ghl') || ''
     };
     setKeys(loadedKeys);
     
     const savedChats = localStorage.getItem('tupia_chats');
     let parsedChats = savedChats ? JSON.parse(savedChats) : [];
-
     if (parsedChats.length > 0) {
       setChats(parsedChats);
       const savedCurrentId = localStorage.getItem('tupia_current_chat');
       setCurrentChatId(savedCurrentId && parsedChats.find(c => c.id === savedCurrentId) ? savedCurrentId : parsedChats[0].id);
-      addLog("[OK] Historial de salas restaurado.");
-    } else {
-      createNewChat();
-    }
+    } else { createNewChat(); }
   }, []);
 
   useEffect(() => {
@@ -146,34 +105,26 @@ export default function AppUI() {
   }, [chats, currentChatId]);
 
   useEffect(() => {
-    if (activeTab === 'chat' && chatBottomRef.current) {
-      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (activeTab === 'chat' && chatBottomRef.current) chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [chats, currentChatId, activeTab]);
 
   const createNewChat = () => {
     const newId = Date.now().toString();
     setChats(prev => [{ id: newId, title: "Nuevo Chat", messages: [] }, ...prev]);
-    setCurrentChatId(newId);
-    setIsSidebarOpen(false);
+    setCurrentChatId(newId); setIsSidebarOpen(false);
   };
 
   const deleteChat = (id) => {
     if (window.confirm("¿Seguro que quieres borrar este chat?")) {
       const newChats = chats.filter(c => c.id !== id);
-      if (newChats.length === 0) {
-        createNewChat();
-      } else {
-        setChats(newChats);
-        if (currentChatId === id) setCurrentChatId(newChats[0].id);
-      }
+      if (newChats.length === 0) createNewChat();
+      else { setChats(newChats); if (currentChatId === id) setCurrentChatId(newChats[0].id); }
     }
   };
 
   const saveSettings = () => {
     Object.entries(keys).forEach(([provider, key]) => localStorage.setItem(`key_${provider}`, key));
-    setIsSaved(true);
-    addLog("[INFO] APIs y CRM guardados en la bóveda.");
+    setIsSaved(true); addLog("[INFO] Configuración guardada en bóveda.");
     setTimeout(() => setIsSaved(false), 2000);
   };
 
@@ -182,19 +133,15 @@ export default function AppUI() {
     const newAttachments = [];
     for (const file of files) {
       if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
+        const reader = new FileReader(); reader.readAsDataURL(file);
         await new Promise(res => reader.onload = () => {
-          newAttachments.push({ type: 'image', name: file.name, mime: file.type, data: reader.result });
-          res();
+          newAttachments.push({ type: 'image', name: file.name, mime: file.type, data: reader.result }); res();
         });
       } else {
-        const text = await file.text();
-        newAttachments.push({ type: 'text', name: file.name, data: text });
+        const text = await file.text(); newAttachments.push({ type: 'text', name: file.name, data: text });
       }
     }
-    setAttachments(prev => [...prev, ...newAttachments]);
-    fileInputRef.current.value = ""; 
+    setAttachments(prev => [...prev, ...newAttachments]); fileInputRef.current.value = ""; 
   };
 
   const handleStudioMedia = (e) => {
@@ -203,7 +150,6 @@ export default function AppUI() {
     setFfmpegLog(`[INFO] Cargados ${files.length} archivos multimedia al estudio.`);
   };
 
-  // 🚀 MOTOR EXCLUSIVO FFMPG WASM PARA RENDERIZADO WEB NATIVO 🚀
   const runFfmpegRender = async () => {
     if (videoFiles.length === 0) {
       alert("Sube algunas imágenes al Estudio primero para poder procesar.");
@@ -216,7 +162,6 @@ export default function AppUI() {
 
     try {
       const ffmpeg = ffmpegRef.current;
-
       ffmpeg.on('log', ({ message }) => {
         setFfmpegLog(prev => `${prev}\n[FFMPEG] ${message}`);
       });
@@ -260,21 +205,9 @@ export default function AppUI() {
     } catch (error) {
       console.error(error);
       setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error.message}`);
-    } compression: finally {
+    } finally { // <--- ¡AQUÍ ESTABA EL ERROR! ¡CORREGIDO!
       setIsRendering(false);
     }
-  };
-
-  const renderMessageContent = (text) => {
-    if (typeof text !== 'string') return <p>Archivo procesado.</p>;
-    const parts = text.split(/(```[\s\S]*?```)/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('```') && part.endsWith('```')) {
-        const match = part.match(/```(\w*)\n([\s\S]*?)```/);
-        return match ? <CodeBlock key={index} lang={match[1]} code={match[2]} /> : <CodeBlock key={index} lang="txt" code={part.slice(3, -3)} />;
-      }
-      return <p key={index} className="whitespace-pre-wrap leading-relaxed">{part}</p>;
-    });
   };
 
   const activeChat = chats.find(c => c.id === currentChatId) || { messages: [] };
@@ -289,25 +222,18 @@ export default function AppUI() {
     if ((!input.trim() && attachments.length === 0) || isLoading) return;
 
     const currentKey = keys[activeModel];
-    if (!currentKey) {
-      alert(`⚠️ Falta tu API Key para ${activeModel.toUpperCase()}!`);
-      setActiveTab('settings'); return;
-    }
+    if (!currentKey) { alert(`⚠️ Falta tu API Key para ${activeModel.toUpperCase()}!`); setActiveTab('settings'); return; }
 
     const textFiles = attachments.filter(a => a.type === 'text');
     let finalInput = input;
-    if (textFiles.length > 0) {
-      finalInput += "\n\n" + textFiles.map(a => `--- ARCHIVO: ${a.name} ---\n${a.data}\n--- FIN DE ARCHIVO ---`).join('\n\n');
-    }
+    if (textFiles.length > 0) finalInput += "\n\n" + textFiles.map(a => `--- ARCHIVO: ${a.name} ---\n${a.data}\n--- FIN DE ARCHIVO ---`).join('\n\n');
     const images = attachments.filter(a => a.type === 'image');
     
     const displayUserText = input + (attachments.length > 0 ? `\n[+ ${attachments.length} archivos]` : '');
     const newMessages = [...currentMessages, { role: 'user', content: displayUserText, rawContent: finalInput }];
     
     let chatTitle = activeChat.title;
-    if (currentMessages.length === 0 && input.trim() !== "") {
-      chatTitle = input.substring(0, 30) + (input.length > 30 ? '...' : '');
-    }
+    if (currentMessages.length === 0 && input.trim() !== "") chatTitle = input.substring(0, 30) + (input.length > 30 ? '...' : '');
 
     updateCurrentChatMessages(newMessages, chatTitle);
     setInput(""); setAttachments([]); setIsLoading(true);
@@ -323,30 +249,25 @@ export default function AppUI() {
         const geminiHistory = history.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }));
         const currentParts = [{ text: finalInput }];
         images.forEach(img => currentParts.push({ inline_data: { mime_type: img.mime, data: img.data.split(',')[1] } }));
-        
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${specificModel}:generateContent?key=${currentKey}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ system_instruction: { parts: [{ text: systemInstruction }] }, contents: [...geminiHistory, { role: 'user', parts: currentParts }] })
         });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
+        const data = await res.json(); if (data.error) throw new Error(data.error.message);
         botReply = data.candidates[0].content.parts[0].text;
       }
       else if (activeModel === 'claude') {
         const claudeHistory = history.map(m => ({ role: m.role, content: m.content }));
         const currentContent = [{ type: 'text', text: finalInput }];
         images.forEach(img => currentContent.push({ type: 'image', source: { type: 'base64', media_type: img.mime, data: img.data.split(',')[1] } }));
-
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': currentKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
           body: JSON.stringify({ model: specificModel, max_tokens: 4096, system: systemInstruction, messages: [...claudeHistory, { role: 'user', content: currentContent }] })
         });
-        const data = await res.json();
-        if (data.type === 'error') throw new Error(data.error.message);
+        const data = await res.json(); if (data.type === 'error') throw new Error(data.error.message);
         botReply = data.content[0].text;
       }
       else {
-        // OpenAI, DeepSeek, Alibaba, Nvidia
         let endpoint = '';
         if (activeModel === 'openai') endpoint = 'https://api.openai.com/v1/chat/completions';
         else if (activeModel === 'deepseek') endpoint = 'https://api.deepseek.com/chat/completions';
@@ -362,13 +283,9 @@ export default function AppUI() {
 
         const res = await fetch(endpoint, {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentKey}` },
-          body: JSON.stringify({ 
-            model: specificModel, // 💖 ¡CORREGIDO! Aquí estaba el error usando modelId fantasma
-            messages: [{ role: 'system', content: systemInstruction }, ...standardHistory, { role: 'user', content: currentContent }] 
-          })
+          body: JSON.stringify({ model: specificModel, messages: [{ role: 'system', content: systemInstruction }, ...standardHistory, { role: 'user', content: currentContent }] })
         });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
+        const data = await res.json(); if (data.error) throw new Error(data.error.message);
         botReply = data.choices[0].message.content;
       }
 
@@ -393,10 +310,21 @@ export default function AppUI() {
     }
   };
 
+  const renderMessageContent = (text) => {
+    if (typeof text !== 'string') return <p>Archivo procesado.</p>;
+    const parts = text.split(/(```[\s\S]*?```)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('```') && part.endsWith('```')) {
+        const match = part.match(/```(\w*)\n([\s\S]*?)```/);
+        return match ? <CodeBlock key={index} lang={match[1]} code={match[2]} /> : <CodeBlock key={index} lang="txt" code={part.slice(3, -3)} />;
+      }
+      return <p key={index} className="whitespace-pre-wrap leading-relaxed">{part}</p>;
+    });
+  };
+
   return (
     <div className="flex flex-col h-[100dvh] bg-black text-white font-sans overflow-hidden">
       
-      {/* HEADER */}
       <header className="p-3 bg-gray-900 border-b border-gray-800 flex justify-between items-center z-10 shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => setIsSidebarOpen(true)} className="text-2xl text-gray-300 hover:text-white px-2 rounded hover:bg-gray-800 transition">☰</button>
@@ -405,7 +333,6 @@ export default function AppUI() {
         <button onClick={createNewChat} className="bg-blue-600/30 text-blue-400 border border-blue-800/50 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors">➕ Nuevo</button>
       </header>
 
-      {/* SIDEBAR */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 z-50 flex animate-in fade-in duration-200">
           <div className="w-4/5 max-w-sm bg-gray-950 h-full border-r border-gray-800 flex flex-col shadow-2xl animate-in slide-in-from-left duration-300">
@@ -426,10 +353,8 @@ export default function AppUI() {
         </div>
       )}
 
-      {/* CUERPO CENTRAL */}
       <main className="flex-1 overflow-y-auto pb-48 relative">
         
-        {/* TAB 1: EL CHAT INTELIGENTE */}
         {activeTab === 'chat' && (
           <div className="p-4 space-y-4">
             {currentMessages.length === 0 && (
@@ -460,7 +385,6 @@ export default function AppUI() {
           </div>
         )}
 
-        {/* TAB 2: EL ESTUDIO DE VIDEO FACRELESS */}
         {activeTab === 'studio' && (
           <div className="p-6 space-y-6">
             <h2 className="text-xl font-bold border-b border-gray-800 pb-2 flex items-center gap-2 text-red-400">
@@ -509,7 +433,6 @@ export default function AppUI() {
           </div>
         )}
 
-        {/* TAB 3: BÓVEDA DE APIS */}
         {activeTab === 'settings' && (
           <div className="p-6 space-y-4">
             <h2 className="text-xl font-bold border-b border-gray-800 pb-2">🔑 Bóveda de APIs</h2>
@@ -527,7 +450,6 @@ export default function AppUI() {
           </div>
         )}
 
-        {/* TAB 4: CONSOLA DE LOGS */}
         {activeTab === 'logs' && (
           <div className="p-4 h-full flex flex-col">
             <h2 className="text-xl font-bold border-b border-gray-800 pb-2 mb-4">📋 Consola Técnica</h2>
@@ -538,7 +460,6 @@ export default function AppUI() {
         )}
       </main>
 
-      {/* PANEL DE ESCRITURA Y SELECTORES */}
       {activeTab === 'chat' && (
         <div className="fixed bottom-[70px] left-0 w-full bg-gray-900 border-t border-gray-800 z-10 p-2 flex flex-col gap-2 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
           <div className="grid grid-cols-3 gap-1">
@@ -588,7 +509,6 @@ export default function AppUI() {
         </div>
       )}
 
-      {/* MENÚ INFERIOR MÓVIL */}
       <nav className="fixed bottom-0 left-0 w-full bg-gray-950 border-t border-gray-800 flex justify-around p-2 z-20 h-[70px]">
         <button onClick={() => setActiveTab('chat')} className={`flex flex-col items-center p-1 w-16 ${activeTab==='chat'?'text-blue-500':'text-gray-500'}`}><span className="text-lg">💬</span><span className="text-[9px] font-bold">CHAT</span></button>
         <button onClick={() => setActiveTab('studio')} className={`flex flex-col items-center p-1 w-16 ${activeTab==='studio'?'text-red-500':'text-gray-500'}`}><span className="text-lg">🎬</span><span className="text-[9px] font-bold">ESTUDIO</span></button>
