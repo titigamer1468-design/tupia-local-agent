@@ -1,35 +1,17 @@
 import React, { useState, useRef, useEffect } from "react";
-// 🚨 IMPORTACIONES DEL MOTOR DE VIDEO REAL SINGLE-THREAD FÍSICO 🚨
-import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
+// 🚨 IMPORTACIONES DEL MOTOR V12 SINGLE-THREAD SIN RESTRICCIONES 🚨
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
-// --- DICCIONARIO DE MODELOS ESPECÍFICOS ---
 const MODEL_VERSIONS = {
-  openai: [
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    { id: 'gpt-4o', name: 'GPT-4o (Mejor)' }
-  ],
-  claude: [
-    { id: 'claude-3-5-sonnet-20241022', name: 'Sonnet 3.5' },
-    { id: 'claude-3-5-haiku-20241022', name: 'Haiku 3.5' }
-  ],
-  gemini: [
-    { id: 'gemini-1.5-flash', name: '1.5 Flash' },
-    { id: 'gemini-1.5-pro', name: '1.5 Pro' }
-  ],
-  deepseek: [
-    { id: 'deepseek-chat', name: 'V3 Chat' },
-    { id: 'deepseek-reasoner', name: 'R1 Reasoner' }
-  ],
-  alibaba: [
-    { id: 'qwen-plus', name: 'Qwen Plus' },
-    { id: 'qwen-max', name: 'Qwen Max' }
-  ],
-  nvidia: [
-    { id: 'meta/llama3-70b-instruct', name: 'Llama 3 70B' }
-  ]
+  openai: [{ id: 'gpt-4o-mini', name: 'GPT-4o Mini' }, { id: 'gpt-4o', name: 'GPT-4o (Mejor)' }],
+  claude: [{ id: 'claude-3-5-sonnet-20241022', name: 'Sonnet 3.5' }, { id: 'claude-3-5-haiku-20241022', name: 'Haiku 3.5' }],
+  gemini: [{ id: 'gemini-1.5-flash', name: '1.5 Flash' }, { id: 'gemini-1.5-pro', name: '1.5 Pro' }],
+  deepseek: [{ id: 'deepseek-chat', name: 'V3 Chat' }, { id: 'deepseek-reasoner', name: 'R1 Reasoner' }],
+  alibaba: [{ id: 'qwen-plus', name: 'Qwen Plus' }, { id: 'qwen-max', name: 'Qwen Max' }],
+  nvidia: [{ id: 'meta/llama3-70b-instruct', name: 'Llama 3 70B' }]
 };
 
-// --- DEFINICIÓN DE MODOS (PROMPTS DEL SISTEMA) ---
 const PERSONAS = {
   default: "Eres Tupia, un asistente de IA experto y amigable. Respondes de forma clara, directa y estructurada.",
   plan: "Eres Tupia MODO PLAN. Eres un Estratega y Project Manager experto. No escribes código. Tu objetivo es desglosar ideas en planes de acción paso a paso, cronogramas, listas de requisitos y definir objetivos. Estructuras todo con listas para máxima claridad.",
@@ -40,7 +22,6 @@ const PERSONAS = {
   infoproducto: "Eres Tupia MODO INFOPRODUCTO. Eres un experto en Marketing Digital y creación de Cursos Online. Diseñas ofertas irresistibles y copy persuasivo."
 };
 
-// --- COMPONENTE HIJO: BLOQUE DE CÓDIGO ---
 const CodeBlock = ({ lang, code }) => {
   const handleCopy = () => navigator.clipboard.writeText(code.trim());
   const handleDownload = () => {
@@ -69,53 +50,36 @@ const CodeBlock = ({ lang, code }) => {
   );
 };
 
-// --- COMPONENTE PRINCIPAL ---
 export default function AppUI() {
   const [chats, setChats] = useState([]);
   const [currentChatId, setCurrentChatId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [attachments, setAttachments] = useState([]); 
-  
   const chatBottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat', 'studio', 'settings', 'logs'
+  const [activeTab, setActiveTab] = useState('chat');
   const [isSaved, setIsSaved] = useState(false);
   const [logs, setLogs] = useState([]);
-  
-  // Selectores
   const [activeModel, setActiveModel] = useState('deepseek'); 
   const [specificModel, setSpecificModel] = useState('deepseek-chat'); 
   const [activePersona, setActivePersona] = useState('default');
-
-  // Estado del Estudio de Video Real
   const [videoFiles, setVideoFiles] = useState([]);
   const [isRendering, setIsRendering] = useState(false);
   const [ffmpegLog, setFfmpegLog] = useState("🎬 Estudio de video preparado. Listo para cargar clips.");
   const [videoResult, setVideoResult] = useState(null);
   
-  // 🛠️ MAPEADO EXPLÍCITO AL ARCHIVO FÍSICO DE LA CARPETA PUBLIC
-  const ffmpegRef = useRef(createFFmpeg({ 
-    log: false,
-    corePath: '/ffmpeg-core.js'
-  }));
-
-  const [keys, setKeys] = useState({
-    gemini: '', openai: '', claude: '', deepseek: '', alibaba: '', nvidia: '', ghl: ''
-  });
+  // 🛠️ Instancia moderna V12
+  const ffmpegRef = useRef(new FFmpeg());
+  const [keys, setKeys] = useState({ gemini: '', openai: '', claude: '', deepseek: '', alibaba: '', nvidia: '', ghl: '' });
 
   const addLog = (msg) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
   useEffect(() => {
-    if (MODEL_VERSIONS[activeModel]) {
-      setSpecificModel(MODEL_VERSIONS[activeModel][0].id);
-    }
+    if (MODEL_VERSIONS[activeModel]) setSpecificModel(MODEL_VERSIONS[activeModel][0].id);
   }, [activeModel]);
 
-  // Cargar llaves y CHATS al iniciar
   useEffect(() => {
     const loadedKeys = {
       gemini: localStorage.getItem('key_gemini') || '',
@@ -130,7 +94,6 @@ export default function AppUI() {
     
     const savedChats = localStorage.getItem('tupia_chats');
     let parsedChats = savedChats ? JSON.parse(savedChats) : [];
-
     if (parsedChats.length > 0) {
       setChats(parsedChats);
       const savedCurrentId = localStorage.getItem('tupia_current_chat');
@@ -164,12 +127,8 @@ export default function AppUI() {
   const deleteChat = (id) => {
     if (window.confirm("¿Seguro que quieres borrar este chat?")) {
       const newChats = chats.filter(c => c.id !== id);
-      if (newChats.length === 0) {
-        createNewChat();
-      } else {
-        setChats(newChats);
-        if (currentChatId === id) setCurrentChatId(newChats[0].id);
-      }
+      if (newChats.length === 0) createNewChat();
+      else { setChats(newChats); if (currentChatId === id) setCurrentChatId(newChats[0].id); }
     }
   };
 
@@ -206,48 +165,45 @@ export default function AppUI() {
     setFfmpegLog(`[INFO] Cargados ${files.length} archivos multimedia al estudio.`);
   };
 
-  // 🚀 MOTOR FFMPG FISICO SECUENCIAL - BYPASS DE RESTRICCIONES DE MEMORIA MÓVIL 🚀
-    const runFfmpegRender = async () => {
-    // 🚨 CONTROL DE SEGURIDAD: Verifica si el navegador permite memoria compartida
-    if (typeof SharedArrayBuffer === "undefined") {
-      setFfmpegLog("❌ ERROR: El navegador no permite aislamiento de memoria (COOP/COEP). Recarga la página.");
-      return;
-    }    if (videoFiles.length === 0) {
+  // 🚀 EL MOTOR DEFINITIVO: V12 UNIFIED (NO SAB, NO COOP/COEP) 🚀
+  const runFfmpegRender = async () => {
+    if (videoFiles.length === 0) {
       alert("Sube algunas imágenes al Estudio primero para poder procesar.");
       return;
     }
     
     setIsRendering(true);
     setVideoResult(null);
-    setFfmpegLog("[INFO] Despertando al motor FFmpeg físico secuencial...");
+    setFfmpegLog("[INFO] Despertando al motor FFmpeg v12 Core...");
 
     try {
       const ffmpeg = ffmpegRef.current;
 
-      ffmpeg.setLogger(({ message }) => {
+      ffmpeg.on('log', ({ message }) => {
         setFfmpegLog(prev => `${prev}\n[FFMPEG] ${message}`);
       });
 
-      if (!ffmpeg.isLoaded()) {
-        setFfmpegLog(prev => `${prev}\n[INFO] Cargando binarios locales en modo unificado...`);
-        // 🚨 Pasamos argumentos para forzar el modo secuencial sin subprocesos compartidos
+      if (!ffmpeg.loaded) {
+        setFfmpegLog(prev => `${prev}\n[INFO] Descargando núcleos unificados sin restricciones desde CDN...`);
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+        
+        // Carga la versión estrictamente de UN hilo (No pide SharedArrayBuffer)
         await ffmpeg.load({
-          arguments: ["-threads", "1"]
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
         });
       }
 
-      setFfmpegLog(prev => `${prev}\n[INFO] Creando sandbox de archivos virtuales...`);
+      setFfmpegLog(prev => `${prev}\n[INFO] Escribiendo fotos en memoria virtual...`);
 
       for (let i = 0; i < videoFiles.length; i++) {
         const fileData = await fetchFile(videoFiles[i].file);
-        ffmpeg.FS('writeFile', `img${i}.jpg`, fileData);
+        await ffmpeg.writeFile(`img${i}.jpg`, fileData);
       }
 
-      setFfmpegLog(prev => `${prev}\n[INFO] Compilando slideshow vertical en h.264 (1080x1920)...`);
+      setFfmpegLog(prev => `${prev}\n[INFO] Procesando slideshow (esto puede tomar unos segundos)...`);
 
-      // Ejecutamos limitando el uso a un único hilo de ejecución directo
-      await ffmpeg.run(
-        '-threads', '1',
+      await ffmpeg.exec([
         '-framerate', '1/2', 
         '-i', 'img%d.jpg',   
         '-c:v', 'libx264',   
@@ -255,20 +211,20 @@ export default function AppUI() {
         '-pix_fmt', 'yuv420p',
         '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
         'output.mp4'         
-      );
+      ]);
 
-      setFfmpegLog(prev => `${prev}\n[INFO] Extrayendo buffer binario de salida...`);
+      setFfmpegLog(prev => `${prev}\n[INFO] Video procesado, generando MP4...`);
 
-      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const data = await ffmpeg.readFile('output.mp4');
       const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
 
       setVideoResult(videoUrl);
-      setFfmpegLog(prev => `${prev}\n✅ ¡VIDEO EXPORTADO CON ÉXITO POR TU CELULAR!`);
+      setFfmpegLog(prev => `${prev}\n✅ ¡ÉXITO! Video exportado perfectamente.`);
 
     } catch (error) {
       console.error(error);
-      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Error de asignación de memoria'}`);
+      setFfmpegLog(prev => `${prev}\n❌ ERROR: ${error?.message || error}`);
     } finally {
       setIsRendering(false);
     }
@@ -452,7 +408,7 @@ export default function AppUI() {
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[90%] p-4 rounded-2xl text-sm shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-900 text-gray-100 border border-gray-700 rounded-bl-sm w-full'}`}>
                   {msg.role === 'assistant' && (
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-b-gray-700/50">
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-700/50">
                       <span className="text-xs font-bold text-gray-500 flex items-center gap-1">🤖 Tupia AI</span>
                       <button onClick={() => navigator.clipboard.writeText(msg.content)} className="text-[10px] uppercase font-bold tracking-wider flex items-center gap-1 text-gray-400 hover:text-white bg-gray-800 px-2 py-1 rounded transition-colors">
                         📋 Copiar Todo
@@ -474,7 +430,7 @@ export default function AppUI() {
             <h2 className="text-xl font-bold border-b border-gray-800 pb-2 flex items-center gap-2 text-red-400">
               <span>🎬</span> Tupia Video Engine
             </h2>
-            <p className="text-xs text-gray-400 leading-relaxed">Sube imágenes para generar tu video Faceless. El motor FFmpeg de un solo hilo procesará los archivos localmente a velocidad nativa sin pedirle permisos especiales al servidor.</p>
+            <p className="text-xs text-gray-400 leading-relaxed">Sube imágenes para generar tu video. Procesamiento local mediante FFmpeg v12 Core.</p>
             
             <div className="bg-gray-900 p-6 rounded-2xl border-2 border-dashed border-gray-800 flex flex-col items-center justify-center text-center cursor-pointer hover:border-red-500/40 transition-colors" onClick={() => document.getElementById('studio-upload').click()}>
               <span className="text-4xl mb-2">🎞️</span>
