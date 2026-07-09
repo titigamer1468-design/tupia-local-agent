@@ -203,7 +203,7 @@ export default function AppUI() {
     setFfmpegLog(`[INFO] Cargados ${files.length} archivos multimedia al estudio.`);
   };
 
-  // 🚀 MOTOR LOCAL FFMPG WASM OPTIMIZADO VÍA CLOUDFLARE COMPLIANT CDN 🚀
+  // 🚀 MOTOR FFMPG WASM OPTIMIZADO Y COMPATIBLE 🚀
   const runFfmpegRender = async () => {
     if (videoFiles.length === 0) {
       alert("Sube algunas imágenes al Estudio primero para poder procesar.");
@@ -222,8 +222,8 @@ export default function AppUI() {
       });
 
       if (!ffmpeg.loaded) {
-        setFfmpegLog(prev => `${prev}\n[INFO] Descargando núcleos binarios distribuidos (A prueba de límites de peso)...`);
-        // 🛠️ Conexión nativa a jsDelivr que evade el límite de 25MB por asset de Cloudflare
+        setFfmpegLog(prev => `${prev}\n[INFO] Descargando núcleos tolerantes en jsDelivr...`);
+        
         await ffmpeg.load({
           coreURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', 'text/javascript'),
           wasmURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
@@ -260,7 +260,7 @@ export default function AppUI() {
 
     } catch (error) {
       console.error(error);
-      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error.message}`);
+      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Bloqueo de hilos en el navegador'}`);
     } finally {
       setIsRendering(false);
     }
