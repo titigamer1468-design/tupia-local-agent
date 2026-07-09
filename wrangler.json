@@ -11,5 +11,10 @@
   },
   "compatibility_flags": [
     "nodejs_compat"
-  ]
+  ],
+  // 🚨 ESTA ES LA CLAVE MAESTRA QUE FALTA EN TU CLOUDFLARE REAL 🚨
+  "headers": {
+    "Cross-Origin-Embedder-Policy": "require-corp",
+    "Cross-Origin-Opener-Policy": "same-origin"
+  }
 }
