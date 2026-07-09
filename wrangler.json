@@ -7,14 +7,14 @@
   },
   "assets": {
     "directory": "dist",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // 🚨 AQUÍ ES DONDE WRANGLER EXIGE LAS CABECERAS PARA ASSETS 🚨
+    "headers": {
+      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Opener-Policy": "same-origin"
+    }
   },
   "compatibility_flags": [
     "nodejs_compat"
-  ],
-  // 🚨 ESTA ES LA CLAVE MAESTRA QUE FALTA EN TU CLOUDFLARE REAL 🚨
-  "headers": {
-    "Cross-Origin-Embedder-Policy": "require-corp",
-    "Cross-Origin-Opener-Policy": "same-origin"
-  }
+  ]
 }
