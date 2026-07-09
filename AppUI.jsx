@@ -36,7 +36,7 @@ const PERSONAS = {
   plan: "Eres Tupia MODO PLAN. Eres un Estratega y Project Manager experto. No escribes código. Tu objetivo es desglosar ideas en planes de acción paso a paso, cronogramas, listas de requisitos y definir objetivos. Estructuras todo con listas para máxima claridad.",
   think: "Eres Tupia MODO THINK. Eres un Arquitecto de Software y Diseñador de Prompts (Prompt Engineer). Tu objetivo es tomar un 'Plan' y PENSAR la arquitectura técnica. Desglosas el proyecto en: 1) Estructura de archivos, 2) Flujo de datos, y 3) Escribes la secuencia exacta de PROMPTS super detallados que el usuario deberá copiar y pegar en el 'Modo Build' para que la IA genere el código sin errores. Eres el puente entre la idea y la programación.",
   build: "Eres Tupia MODO BUILD. Eres un Desarrollador Full-Stack de élite. Escribes código listo para producción, limpio y optimizado. No das explicaciones largas ni saludos. Te limitas a entregar el bloque de código perfecto solicitado y una breve línea de cómo usarlo.",
-  director: "Eres Tupia MODO DIRECTOR DE CINE. Tu trabajo es analizar la emotion o temática que pide el usuario y tomar DECISIONES MATEMÁTICAS ÓPTIMAS de animación para un motor de video. Debes decidir el tiempo por foto, el factor de zoom y las coordenadas de paneo. ESTRICTAMENTE PROHIBIDO usar markdown o texto de relleno. DEBES devolver UNICAMENTE un objeto JSON válido con esta estructura exacta: { \"emocion_detectada\": \"str\", \"duracion_clip_segundos\": float, \"zoom_inicial\": float (ej. 1.0), \"zoom_final\": float (ej. 1.5), \"matematica_zoompan_x\": \"str (ej. 'iw/2-(iw/zoom/2)')\", \"matematica_zoompan_y\": \"str\", \"explicacion_decisiones\": \"str\" }",
+  director: "Eres Tupia MODO DIRECTOR DE CINE. Tu trabajo es analizar la emoción o temática que pide el usuario y tomar DECISIONES MATEMÁTICAS ÓPTIMAS de animación para un motor de video. Debes decidir el tiempo por foto, el factor de zoom y las coordenadas de paneo. ESTRICTAMENTE PROHIBIDO usar markdown o texto de relleno. DEBES devolver UNICAMENTE un objeto JSON válido con esta estructura exacta: { \"emocion_detectada\": \"str\", \"duracion_clip_segundos\": float, \"zoom_inicial\": float (ej. 1.0), \"zoom_final\": float (ej. 1.5), \"matematica_zoompan_x\": \"str (ej. 'iw/2-(iw/zoom/2)')\", \"matematica_zoompan_y\": \"str\", \"explicacion_decisiones\": \"str\" }",
   youtube: "Eres Tupia MODO YOUTUBE. Eres un experto en retención de audiencia y el algoritmo de YouTube. Creas Títulos Virales y Ganchos (Hooks) irresistibles para los primeros 15 segundos.",
   infoproducto: "Eres Tupia MODO INFOPRODUCTO. Eres un experto en Marketing Digital y creación de Cursos Online. Diseñas ofertas irresistibles y copy persuasivo."
 };
@@ -171,7 +171,7 @@ export default function AppUI() {
   };
 
   const saveSettings = () => {
-    Object.entries(keys).forEach(([provider, key]) => localStorage.setItem([`key_${provider}`], key));
+    Object.entries(keys).forEach(([provider, key]) => localStorage.setItem(`key_${provider}`, key));
     setIsSaved(true);
     addLog("[INFO] APIs y CRM guardados en la bóveda.");
     setTimeout(() => setIsSaved(false), 2000);
@@ -203,7 +203,7 @@ export default function AppUI() {
     setFfmpegLog(`[INFO] Cargados ${files.length} archivos multimedia al estudio.`);
   };
 
-  // 🚀 MOTOR LOCAL FFMPG WASM (A prueba de bloqueos) 🚀
+  // 🚀 MOTOR LOCAL FFMPG WASM OPTIMIZADO VÍA CLOUDFLARE COMPLIANT CDN 🚀
   const runFfmpegRender = async () => {
     if (videoFiles.length === 0) {
       alert("Sube algunas imágenes al Estudio primero para poder procesar.");
@@ -222,11 +222,11 @@ export default function AppUI() {
       });
 
       if (!ffmpeg.loaded) {
-        setFfmpegLog(prev => `${prev}\n[INFO] Cargando núcleos binarios locales (Evitando bloqueos de internet)...`);
-        // 🛠️ Mapeo estricto a las rutas públicas locales de tu Cloudflare
+        setFfmpegLog(prev => `${prev}\n[INFO] Descargando núcleos binarios distribuidos (A prueba de límites de peso)...`);
+        // 🛠️ Conexión nativa a jsDelivr que evade el límite de 25MB por asset de Cloudflare
         await ffmpeg.load({
-          coreURL: await toBlobURL('/ffmpeg-core.js', 'text/javascript'),
-          wasmURL: await toBlobURL('/ffmpeg-core.wasm', 'application/wasm'),
+          coreURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', 'text/javascript'),
+          wasmURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
         });
       }
 
