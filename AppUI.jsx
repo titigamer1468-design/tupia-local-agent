@@ -206,7 +206,7 @@ export default function AppUI() {
     setFfmpegLog(`[INFO] Cargados ${files.length} archivos multimedia al estudio.`);
   };
 
-  // 🚀 MOTOR FFMPG WASM OPTIMIZADO PARA ARCHIVO FISICO LIGERO 🚀
+  // 🚀 MOTOR FFMPG FISICO SECUENCIAL - BYPASS DE RESTRICCIONES DE MEMORIA MÓVIL 🚀
   const runFfmpegRender = async () => {
     if (videoFiles.length === 0) {
       alert("Sube algunas imágenes al Estudio primero para poder procesar.");
@@ -215,7 +215,7 @@ export default function AppUI() {
     
     setIsRendering(true);
     setVideoResult(null);
-    setFfmpegLog("[INFO] Despertando al motor FFmpeg físico ligero...");
+    setFfmpegLog("[INFO] Despertando al motor FFmpeg físico secuencial...");
 
     try {
       const ffmpeg = ffmpegRef.current;
@@ -225,8 +225,11 @@ export default function AppUI() {
       });
 
       if (!ffmpeg.isLoaded()) {
-        setFfmpegLog(prev => `${prev}\n[INFO] Cargando binarios físicos locales (<25MB)...`);
-        await ffmpeg.load();
+        setFfmpegLog(prev => `${prev}\n[INFO] Cargando binarios locales en modo unificado...`);
+        // 🚨 Pasamos argumentos para forzar el modo secuencial sin subprocesos compartidos
+        await ffmpeg.load({
+          arguments: ["-threads", "1"]
+        });
       }
 
       setFfmpegLog(prev => `${prev}\n[INFO] Creando sandbox de archivos virtuales...`);
@@ -238,7 +241,9 @@ export default function AppUI() {
 
       setFfmpegLog(prev => `${prev}\n[INFO] Compilando slideshow vertical en h.264 (1080x1920)...`);
 
+      // Ejecutamos limitando el uso a un único hilo de ejecución directo
       await ffmpeg.run(
+        '-threads', '1',
         '-framerate', '1/2', 
         '-i', 'img%d.jpg',   
         '-c:v', 'libx264',   
@@ -259,7 +264,7 @@ export default function AppUI() {
 
     } catch (error) {
       console.error(error);
-      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Fallo en compilación física local'}`);
+      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Error de asignación de memoria'}`);
     } finally {
       setIsRendering(false);
     }
@@ -443,7 +448,7 @@ export default function AppUI() {
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[90%] p-4 rounded-2xl text-sm shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-900 text-gray-100 border border-gray-700 rounded-bl-sm w-full'}`}>
                   {msg.role === 'assistant' && (
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-700/50">
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-b-gray-700/50">
                       <span className="text-xs font-bold text-gray-500 flex items-center gap-1">🤖 Tupia AI</span>
                       <button onClick={() => navigator.clipboard.writeText(msg.content)} className="text-[10px] uppercase font-bold tracking-wider flex items-center gap-1 text-gray-400 hover:text-white bg-gray-800 px-2 py-1 rounded transition-colors">
                         📋 Copiar Todo
