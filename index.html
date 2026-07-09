@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\" />
     <title>Tupia Workspace</title>
     
     <link rel="manifest" href="/manifest.json" />
@@ -10,6 +10,14 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/11696/11696147.png" />
     
     <script src="/tailwind.js"></script>
+
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/coep-sw.js").then(() => {
+          console.log("🔒 Bypass COOP/COEP activo localmente.");
+        }).catch(err => console.error("Error al registrar SW:", err));
+      }
+    </script>
   </head>
   <body class="bg-black text-white">
     <div id="root"></div>
