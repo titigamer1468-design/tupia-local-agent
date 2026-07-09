@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-// 🚨 IMPORTACIONES DEL MOTOR DE VIDEO REAL SINGLE-THREAD 🚨
+// 🚨 IMPORTACIONES DEL MOTOR DE VIDEO REAL SINGLE-THREAD FÍSICO 🚨
 import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 
 // --- DICCIONARIO DE MODELOS ESPECÍFICOS ---
@@ -97,8 +97,11 @@ export default function AppUI() {
   const [ffmpegLog, setFfmpegLog] = useState("🎬 Estudio de video preparado. Listo para cargar clips.");
   const [videoResult, setVideoResult] = useState(null);
   
-  // Instanciamos la API v0.11 estable
-  const ffmpegRef = useRef(createFFmpeg({ log: false }));
+  // 🛠️ MAPEADO EXPLÍCITO AL ARCHIVO FÍSICO DE LA CARPETA PUBLIC
+  const ffmpegRef = useRef(createFFmpeg({ 
+    log: false,
+    corePath: '/ffmpeg-core.js'
+  }));
 
   const [keys, setKeys] = useState({
     gemini: '', openai: '', claude: '', deepseek: '', alibaba: '', nvidia: '', ghl: ''
@@ -203,7 +206,7 @@ export default function AppUI() {
     setFfmpegLog(`[INFO] Cargados ${files.length} archivos multimedia al estudio.`);
   };
 
-  // 🚀 MOTOR FFMPG WASM OPTIMIZADO PARA HILO ÚNICO TOLERANTE 🚀
+  // 🚀 MOTOR FFMPG WASM OPTIMIZADO PARA ARCHIVO FISICO LIGERO 🚀
   const runFfmpegRender = async () => {
     if (videoFiles.length === 0) {
       alert("Sube algunas imágenes al Estudio primero para poder procesar.");
@@ -212,7 +215,7 @@ export default function AppUI() {
     
     setIsRendering(true);
     setVideoResult(null);
-    setFfmpegLog("[INFO] Despertando al motor FFmpeg de un solo hilo...");
+    setFfmpegLog("[INFO] Despertando al motor FFmpeg físico ligero...");
 
     try {
       const ffmpeg = ffmpegRef.current;
@@ -222,7 +225,7 @@ export default function AppUI() {
       });
 
       if (!ffmpeg.isLoaded()) {
-        setFfmpegLog(prev => `${prev}\n[INFO] Cargando núcleos estables libres de bloqueos...`);
+        setFfmpegLog(prev => `${prev}\n[INFO] Cargando binarios físicos locales (<25MB)...`);
         await ffmpeg.load();
       }
 
@@ -256,7 +259,7 @@ export default function AppUI() {
 
     } catch (error) {
       console.error(error);
-      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Fallo en compilación local'}`);
+      setFfmpegLog(prev => `${prev}\n❌ ERROR DEL PROCESADOR: ${error?.message || error || 'Fallo en compilación física local'}`);
     } finally {
       setIsRendering(false);
     }
